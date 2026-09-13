@@ -4,6 +4,18 @@ Re-enable all 40 CUs on the AMD BC-250 (gfx1013 / Cyan Skillfish / salvaged PS5 
 
 The BC-250 ships with 24 of 40 RDNA2 CUs active. This patch unlocks all 40 by writing two hardware registers during amdgpu driver init. No firmware mods, no permanent changes — just a kernel module parameter.
 
+> **Fork note** — this fork fixes the build script for newer kernels. Upstream's
+> `scripts/bc250-enable-40cu.sh` was tested on kernel 6.19 and silently breaks on
+> 7.x: the patch anchor matched the function prototype instead of the definition
+> (inserting the register writes into an unrelated function), the success check
+> grepped for a string the patch never emits, and the out-of-tree build failed on
+> `amdgpu_trace.h`'s relative include. See
+> [`scripts/bc250-enable-40cu.sh`](scripts/bc250-enable-40cu.sh) for details.
+>
+> Verified on Ubuntu 26.04 / kernel 7.0.0-31-generic, contiguous harvest board.
+> All upstream research and credit remains with
+> [duggasco](https://github.com/duggasco/bc250-40cu-unlock).
+
 ## Results
 
 **pp512 (Vulkan LLM inference, Qwen3.5-9B Q4_K_XL):**
@@ -34,13 +46,18 @@ The patch writes both during `gfx_v10_0_get_cu_info()`, guarded by `device == 0x
 ### Option 1: Build Script (any distro)
 
 ```bash
-git clone https://github.com/duggasco/bc250-40cu-unlock.git
+git clone https://github.com/wdonega/bc250-40cu-unlock.git
 cd bc250-40cu-unlock
 sudo ./scripts/bc250-enable-40cu.sh build
 sudo ./scripts/bc250-enable-40cu.sh enable   # reboots
 ```
 
-Requirements: `gcc`, `make`, `zstd`, kernel headers (`linux-headers-$(uname -r)`)
+Requirements: `gcc`, `make`, `zstd`, `binutils`, `pciutils`, kernel headers and kernel source.
+
+```bash
+sudo apt install -y gcc make zstd binutils pciutils \
+  linux-headers-$(uname -r) linux-source-$(uname -r | cut -d- -f1)
+```
 
 ### Option 2: Apply Patch Manually
 
